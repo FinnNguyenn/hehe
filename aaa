@@ -1,103 +1,41 @@
-package com.example.alarm.DAO;
+import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.Fragment;
+import com.example.smartalarm.R;
+import com.example.smartalarm.fragments.AlarmFragment;
+import com.example.smartalarm.fragments.StopwatchFragment;
+import com.example.smartalarm.fragments.TimerFragment;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 
-import android.content.ContentValues;
-import android.content.Context;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
+public class MainActivity extends AppCompatActivity {
 
-import com.example.alarm.Database.AlarmContract;
-import com.example.alarm.Model.Alarm;
-import com.example.alarm.Database.AlarmDatabaseHelper;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
 
+        BottomNavigationView bottomNav = findViewById(R.id.bottom_navigation);
+        bottomNav.setOnItemSelectedListener(item -> {
+            Fragment selected = null;
+            int id = item.getItemId();
+            if (id == R.id.nav_alarm) {
+                selected = new AlarmFragment();
+            } else if (id == R.id.nav_stopwatch) {
+                selected = new StopwatchFragment();
+            } else if (id == R.id.nav_timer) {
+                selected = new TimerFragment();
+            }
+            if (selected != null) {
+                getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.fragment_container, selected)
+                        .commit();
+            }
+            return true;
+        });
 
-import java.util.*;
-
-
-public class AlarmDao {
-    private final AlarmDatabaseHelper databaseHelper;
-
-    public AlarmDao(Context context){
-        databaseHelper = new AlarmDatabaseHelper(context);
+        // Man hinh mac dinh
+        if (savedInstanceState == null) {
+            bottomNav.setSelectedItemId(R.id.nav_alarm);
+        }
     }
-
-    public long insertAlarm(Alarm alarm){
-        ContentValues values = new ContentValues();
-        values = alarmToContentValues(alarm);
-        long rowId = databaseHelper.insertAlarm(values);
-        return rowId;
-    }
-
-    public int deleteAlarm(int id){
-        int rowDel = databaseHelper.deleteAlarm(id);
-        return rowDel;
-    }
-
-    public int updateAlarm(Alarm alarm){
-        ContentValues values = new ContentValues();
-        values = alarmToContentValues(alarm);
-
-        int rowsUp = databaseHelper.updateAlarm(values, alarm);
-        return rowsUp;
-    }
-    public Alarm getAlarmbyId(int id){
-        Alarm alarm = databaseHelper.getAlarmById(id);
-        return alarm;
-    }
-
-    public List<Alarm> getAllAlarms(){
-        List<Alarm> al = new ArrayList<>();
-        al = databaseHelper.getAllAlarms();
-        return al;
-    }
-
-    private ContentValues alarmToContentValues(Alarm alarm){
-        ContentValues values = new ContentValues();
-
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_HOUR,
-                alarm.getHour()
-        );
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_MINUTE,
-                alarm.getMinute()
-        );
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_LABEL,
-                alarm.getLabel()
-        );
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_REPEAT_DAYS,
-                alarm.getRepeatDays()
-        );
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_ENABLED,
-                alarm.getEnabled() ? 1 : 0
-        );
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_MUSIC_URI,
-                alarm.getMusicUri()
-        );
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_VOLUMNE,
-                alarm.getVolumne()
-        );
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_RANDOM,
-                alarm.getRandomMusic() ? 1 : 0
-        );
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_LOOP,
-                alarm.getLoop() ? 1 : 0
-        );
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_VIBRATE,
-                alarm.getVibrate() ? 1 : 0
-        );
-        values.put(
-                AlarmContract.AlarmEntry.COLUMN_MUSIC_ID,
-                alarm.getMusicId()
-        );
-        return values;
-    }
-
 }
