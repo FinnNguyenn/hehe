@@ -1,141 +1,217 @@
-package com.yourpackage.adapters;
+package com.yourpackage.fragments;
 
+import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.widget.SwitchCompat;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.yourpackage.R;
+import com.yourpackage.adapters.AlarmAdapter;
+import com.yourpackage.database.AlarmDao;
 import com.yourpackage.models.Alarm;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class AlarmAdapter
-        extends RecyclerView.Adapter<AlarmAdapter.AlarmViewHolder> {
+public class AlarmFragment extends Fragment {
 
-    private final List<Alarm> alarmList = new ArrayList<>();
+    public static final String REQUEST_ALARM_CHANGED =
+            "request_alarm_changed";
 
-    private final OnAlarmClickListener onAlarmClickListener;
-    private final OnAlarmEnabledChangeListener onEnabledChangeListener;
+    public static final String RESULT_ACTION =
+            "result_action";
 
-    public AlarmAdapter(
-            OnAlarmClickListener onAlarmClickListener,
-            OnAlarmEnabledChangeListener onEnabledChangeListener
-    ) {
-        this.onAlarmClickListener = onAlarmClickListener;
-        this.onEnabledChangeListener = onEnabledChangeListener;
+    public static final String ACTION_SAVED =
+            "action_saved";
+
+    public static final String ACTION_DELETED =
+            "action_deleted";
+
+    private RecyclerView rvAlarms;
+    private TextView tvAddNew;
+
+    private AlarmAdapter alarmAdapter;
+    private AlarmDao alarmDao;
+
+    private final ExecutorService databaseExecutor =
+            Executors.newSingleThreadExecutor();
+
+    public AlarmFragment() {
+        super(R.layout.fragment_alarm);
     }
 
-    @NonNull
     @Override
-    public AlarmViewHolder onCreateViewHolder(
-            @NonNull ViewGroup parent,
-            int viewType
+    public void onViewCreated(
+            @NonNull View view,
+            @Nullable Bundle savedInstanceState
     ) {
-        View view = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.item_alarm, parent, false);
+        super.onViewCreated(view, savedInstanceState);
 
-        return new AlarmViewHolder(view);
+        rvAlarms = view.findViewById(R.id.rv_alarms);
+        tvAddNew = view.findViewById(R.id.tv_add_new);
+
+        alarmDao = new AlarmDao(requireContext());
+
+        setupRecyclerView();
+        setupClickListeners();
+        setupCrudResultListener();
+
+        loadAlarms();
     }
 
-    @Override
-    public void onBindViewHolder(
-            @NonNull AlarmViewHolder holder,
-            int position
-    ) {
-        Alarm alarm = alarmList.get(position);
+    private void setupRecyclerView() {
+        alarmAdapter = new AlarmAdapter(
+                // Nhấn vào một alarm để sửa
+                alarm -> openCrudFragment(alarm.getId()),
 
-        String formattedTime = String.format(
-                Locale.getDefault(),
-                "%02d:%02d",
-                alarm.getHour(),
-                alarm.getMinute()
+                // Bật hoặc tắt alarm
+                (alarm, enabled) ->
+                        updateAlarmEnabled(alarm, enabled)
         );
 
-        holder.tvTime.setText(formattedTime);
-
-        String label = alarm.getLabel();
-
-        if (label == null || label.trim().isEmpty()) {
-            holder.tvLabel.setText("Alarm");
-        } else {
-            holder.tvLabel.setText(label);
-        }
-
-        /*
-         * Phải bỏ listener cũ trước khi setChecked.
-         * Nếu không, RecyclerView bind lại item có thể gọi nhầm callback.
-         */
-        holder.switchEnabled.setOnCheckedChangeListener(null);
-        holder.switchEnabled.setChecked(alarm.isEnabled());
-
-        holder.switchEnabled.setOnCheckedChangeListener(
-                (buttonView, isChecked) -> {
-                    alarm.setEnabled(isChecked);
-
-                    if (onEnabledChangeListener != null) {
-                        onEnabledChangeListener.onEnabledChanged(
-                                alarm,
-                                isChecked
-                        );
-                    }
-                }
+        rvAlarms.setLayoutManager(
+                new LinearLayoutManager(requireContext())
         );
 
-        holder.itemView.setOnClickListener(view -> {
-            if (onAlarmClickListener != null) {
-                onAlarmClickListener.onAlarmClick(alarm);
-            }
+        rvAlarms.setAdapter(alarmAdapter);
+        rvAlarms.setHasFixedSize(true);
+    }
+
+    private void setupClickListeners() {
+        tvAddNew.setOnClickListener(view -> {
+            // -1 nghĩa là thêm alarm mới
+            openCrudFragment(-1);
         });
     }
 
-    @Override
-    public int getItemCount() {
-        return alarmList.size();
+    private void setupCrudResultListener() {
+        getParentFragmentManager()
+                .setFragmentResultListener(
+                        REQUEST_ALARM_CHANGED,
+                        getViewLifecycleOwner(),
+                        (requestKey, bundle) -> {
+                            String action = bundle.getString(
+                                    RESULT_ACTION,
+                                    ACTION_SAVED
+                            );
+
+                            // CrudFragment đã sửa DB xong,
+                            // AlarmFragment chỉ cần tải lại danh sách.
+                            loadAlarms();
+
+                            if (ACTION_DELETED.equals(action)) {
+                                showToast("Đã xóa báo thức");
+                            } else {
+                                showToast("Đã lưu báo thức");
+                            }
+                        }
+                );
     }
 
-    public void setAlarmList(List<Alarm> alarms) {
-        alarmList.clear();
+    private void loadAlarms() {
+        databaseExecutor.execute(() -> {
+            List<Alarm> alarms = alarmDao.getAllAlarms();
 
-        if (alarms != null) {
-            alarmList.addAll(alarms);
-        }
+            if (!isAdded()) {
+                return;
+            }
 
-        notifyDataSetChanged();
+            requireActivity().runOnUiThread(() -> {
+                if (!isAdded()) {
+                    return;
+                }
+
+                alarmAdapter.setAlarmList(alarms);
+            });
+        });
     }
 
-    public Alarm getAlarmAt(int position) {
-        return alarmList.get(position);
-    }
-
-    static class AlarmViewHolder extends RecyclerView.ViewHolder {
-
-        private final TextView tvTime;
-        private final TextView tvLabel;
-        private final SwitchCompat switchEnabled;
-
-        public AlarmViewHolder(@NonNull View itemView) {
-            super(itemView);
-
-            tvTime = itemView.findViewById(R.id.tv_time);
-            tvLabel = itemView.findViewById(R.id.tv_label);
-            switchEnabled = itemView.findViewById(
-                    R.id.switch_enabled
+    private void updateAlarmEnabled(
+            Alarm alarm,
+            boolean enabled
+    ) {
+        databaseExecutor.execute(() -> {
+            int affectedRows = alarmDao.updateAlarmEnabled(
+                    alarm.getId(),
+                    enabled
             );
+
+            if (affectedRows <= 0) {
+                if (!isAdded()) {
+                    return;
+                }
+
+                requireActivity().runOnUiThread(() -> {
+                    showToast("Không thể cập nhật báo thức");
+
+                    // Đọc lại database để Switch trở về giá trị cũ
+                    loadAlarms();
+                });
+
+                return;
+            }
+
+            /*
+             * Sau này đặt AlarmManager ở đây:
+             *
+             * if (enabled) {
+             *     AlarmScheduler.schedule(requireContext(), alarm);
+             * } else {
+             *     AlarmScheduler.cancel(requireContext(), alarm.getId());
+             * }
+             */
+        });
+    }
+
+    private void openCrudFragment(int alarmId) {
+        CrudFragment crudFragment =
+                CrudFragment.newInstance(alarmId);
+
+        getParentFragmentManager()
+                .beginTransaction()
+                .replace(
+                        R.id.fragment_container,
+                        crudFragment
+                )
+                .addToBackStack("crud_alarm")
+                .commit();
+    }
+
+    private void showToast(String message) {
+        if (!isAdded()) {
+            return;
         }
+
+        Toast.makeText(
+                requireContext(),
+                message,
+                Toast.LENGTH_SHORT
+        ).show();
     }
 
-    public interface OnAlarmClickListener {
-        void onAlarmClick(Alarm alarm);
+    @Override
+    public void onResume() {
+        super.onResume();
+
+        /*
+         * Có thể tải lại để đảm bảo danh sách luôn mới
+         * khi quay lại AlarmFragment.
+         */
+        loadAlarms();
     }
 
-    public interface OnAlarmEnabledChangeListener {
-        void onEnabledChanged(Alarm alarm, boolean enabled);
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        databaseExecutor.shutdown();
     }
 }
