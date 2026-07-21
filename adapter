@@ -9,8 +9,8 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.alarm.R;
 import com.example.alarm.Model.Alarm;
+import com.example.alarm.R;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,14 +63,14 @@ public class AlarmAdapter
         String label = alarm.getLabel();
 
         if (label == null || label.trim().isEmpty()) {
-            holder.tvLabel.setText("Alarm");
+            holder.tvLabel.setText("Báo thức");
         } else {
             holder.tvLabel.setText(label);
         }
 
         /*
-         * Phải bỏ listener cũ trước khi setChecked.
-         * Nếu không, RecyclerView bind lại item có thể gọi nhầm callback.
+         * RecyclerView tái sử dụng item.
+         * Phải xóa listener cũ trước khi gọi setChecked().
          */
         holder.switchEnabled.setOnCheckedChangeListener(null);
         holder.switchEnabled.setChecked(alarm.getEnabled());
@@ -133,6 +133,6 @@ public class AlarmAdapter
     }
 
     public interface OnAlarmEnabledChangeListener {
-        int onEnabledChanged(Alarm alarm);
+        void onEnabledChanged(Alarm alarm);
     }
 }
