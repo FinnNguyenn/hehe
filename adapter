@@ -1,4 +1,4 @@
-package com.yourpackage.adapters;
+package com.example.alarm.Adapter;
 
 import android.view.LayoutInflater;
 import android.view.View;
@@ -9,8 +9,8 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.yourpackage.R;
-import com.yourpackage.models.Alarm;
+import com.example.alarm.R;
+import com.example.alarm.Model.Alarm;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,17 +73,14 @@ public class AlarmAdapter
          * Nếu không, RecyclerView bind lại item có thể gọi nhầm callback.
          */
         holder.switchEnabled.setOnCheckedChangeListener(null);
-        holder.switchEnabled.setChecked(alarm.isEnabled());
+        holder.switchEnabled.setChecked(alarm.getEnabled());
 
         holder.switchEnabled.setOnCheckedChangeListener(
                 (buttonView, isChecked) -> {
                     alarm.setEnabled(isChecked);
 
                     if (onEnabledChangeListener != null) {
-                        onEnabledChangeListener.onEnabledChanged(
-                                alarm,
-                                isChecked
-                        );
+                        onEnabledChangeListener.onEnabledChanged(alarm);
                     }
                 }
         );
@@ -136,6 +133,6 @@ public class AlarmAdapter
     }
 
     public interface OnAlarmEnabledChangeListener {
-        void onEnabledChanged(Alarm alarm, boolean enabled);
+        int onEnabledChanged(Alarm alarm);
     }
 }
