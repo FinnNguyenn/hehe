@@ -1,10 +1,7 @@
 package com.example.alarm.Fragment;
 
-
 import android.os.Bundle;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -14,11 +11,10 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.alarm.R;
 import com.example.alarm.Adapter.AlarmAdapter;
 import com.example.alarm.DAO.AlarmDao;
 import com.example.alarm.Model.Alarm;
-import com.example.alarm.Fragment.CrudFragment;
+import com.example.alarm.R;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -44,10 +40,7 @@ public class AlarmFragment extends Fragment {
     private AlarmAdapter alarmAdapter;
     private AlarmDao alarmDao;
 
-    private CrudFragment crudFragment;
-
-    private final ExecutorService databaseExecutor =
-            Executors.newSingleThreadExecutor();
+    private ExecutorService databaseExecutor;
 
     public AlarmFragment() {
         super(R.layout.fragment_alarm);
@@ -65,20 +58,23 @@ public class AlarmFragment extends Fragment {
 
         alarmDao = new AlarmDao(requireContext());
 
+        databaseExecutor = Executors.newSingleThreadExecutor();
+
         setupRecyclerView();
         setupClickListeners();
         setupCrudResultListener();
 
-        alarmDao.getAllAlarms();
+        loadAlarms();
     }
 
     private void setupRecyclerView() {
         alarmAdapter = new AlarmAdapter(
-                // Nhấn vào một alarm để sửa
+
+                // Bấm vào item để sửa alarm
                 alarm -> openCrudFragment(alarm.getId()),
 
-                // Bật hoặc tắt alarm
-                (alarm) -> alarmDao.updateAlarm(alarm)
+                // Bật hoặc tắt switch
+                this::updateAlarmEnabled
         );
 
         rvAlarms.setLayoutManager(
@@ -91,7 +87,7 @@ public class AlarmFragment extends Fragment {
 
     private void setupClickListeners() {
         tvAddNew.setOnClickListener(view -> {
-            // -1 nghĩa là thêm alarm mới
+            // alarmId = -1 nghĩa là thêm báo thức mới
             openCrudFragment(-1);
         });
     }
@@ -102,14 +98,13 @@ public class AlarmFragment extends Fragment {
                         REQUEST_ALARM_CHANGED,
                         getViewLifecycleOwner(),
                         (requestKey, bundle) -> {
+
                             String action = bundle.getString(
                                     RESULT_ACTION,
                                     ACTION_SAVED
                             );
 
-                            // CrudFragment đã sửa DB xong,
-                            // AlarmFragment chỉ cần tải lại danh sách.
-                            alarmDao.getAllAlarms();
+                            loadAlarms();
 
                             if (ACTION_DELETED.equals(action)) {
                                 showToast("Đã xóa báo thức");
@@ -120,7 +115,64 @@ public class AlarmFragment extends Fragment {
                 );
     }
 
+    /**
+     * Đọc danh sách từ database và đưa lên RecyclerView.
+     */
+    private void loadAlarms() {
+        if (databaseExecutor == null ||
+                databaseExecutor.isShutdown()) {
+            return;
+        }
 
+        databaseExecutor.execute(() -> {
+            List<Alarm> alarms = alarmDao.getAllAlarms();
+
+            if (!isAdded()) {
+                return;
+            }
+
+            requireActivity().runOnUiThread(() -> {
+                if (!isAdded() || getView() == null) {
+                    return;
+                }
+
+                alarmAdapter.setAlarmList(alarms);
+            });
+        });
+    }
+
+    /**
+     * Object Alarm đã được Adapter thay đổi enabled trước khi vào đây.
+     */
+    private void updateAlarmEnabled(Alarm alarm) {
+        if (databaseExecutor == null ||
+                databaseExecutor.isShutdown()) {
+            return;
+        }
+
+        databaseExecutor.execute(() -> {
+            int rowsUpdated = alarmDao.updateAlarm(alarm);
+
+            if (rowsUpdated <= 0 && isAdded()) {
+                requireActivity().runOnUiThread(() -> {
+                    showToast("Không thể cập nhật báo thức");
+
+                    // Tải lại để switch trở về trạng thái trong database
+                    loadAlarms();
+                });
+            }
+
+            /*
+             * Sau này bạn gọi AlarmScheduler ở đây.
+             *
+             * if (alarm.getEnabled()) {
+             *     AlarmScheduler.schedule(requireContext(), alarm);
+             * } else {
+             *     AlarmScheduler.cancel(requireContext(), alarm.getId());
+             * }
+             */
+        });
+    }
 
     private void openCrudFragment(int alarmId) {
         CrudFragment crudFragment =
@@ -152,16 +204,21 @@ public class AlarmFragment extends Fragment {
     public void onResume() {
         super.onResume();
 
-        /*
-         * Có thể tải lại để đảm bảo danh sách luôn mới
-         * khi quay lại AlarmFragment.
-         */
-        alarmDao.getAllAlarms();
+        if (alarmDao != null && alarmAdapter != null) {
+            loadAlarms();
+        }
     }
 
     @Override
-    public void onDestroy() {
-        super.onDestroy();
-        databaseExecutor.shutdown();
+    public void onDestroyView() {
+        super.onDestroyView();
+
+        if (databaseExecutor != null) {
+            databaseExecutor.shutdown();
+        }
+
+        rvAlarms = null;
+        tvAddNew = null;
+        alarmAdapter = null;
     }
 }
